@@ -1095,7 +1095,7 @@ def main():
     print("=" * 60)
     
     while True:
-        print("\nChoose an option:")
+        print("\n 👍Choose an option:")
         print("1. 🔍 Complete Store Scrape (All Data + Competitors)")
         print("2. 🏢 Find Competitors Only")
         print("3. 📊 Analyze Existing Competitors")
@@ -1183,7 +1183,7 @@ def main():
         if choice in ["1", "2", "3", "4"]:
             continue_choice = input("\nDo you want to perform another operation? (y/n): ").strip().lower()
             if continue_choice not in ['y', 'yes']:
-                print("Goodbye!")
+                print("👋Goodbye!")
                 break
 
 
