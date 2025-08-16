@@ -19,16 +19,13 @@ class AllInOneShopifyScraper:
         })
         self.brand_id = None
         
-        # Initialize database
         self.init_database()
         
     def init_database(self):
-        """Initialize SQLite database with all tables"""
         print("🗄️ Initializing database...")
         self.conn = sqlite3.connect(self.db_name)
         self.cursor = self.conn.cursor()
         
-        # Create tables
         self.cursor.executescript("""
             CREATE TABLE IF NOT EXISTS brands (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -115,7 +112,6 @@ class AllInOneShopifyScraper:
         print("✅ Database initialized successfully!")
     
     def create_or_get_brand(self):
-        """Create or get existing brand"""
         try:
             self.cursor.execute("SELECT id FROM brands WHERE store_url = ?", (self.base_url,))
             existing = self.cursor.fetchone()
@@ -143,7 +139,6 @@ class AllInOneShopifyScraper:
             return None
     
     def extract_brand_name(self):
-        """Extract brand name from homepage"""
         try:
             response = self.session.get(self.base_url, timeout=10)
             if response.status_code == 200:
@@ -161,7 +156,6 @@ class AllInOneShopifyScraper:
             return "Unknown Brand"
     
     def extract_brand_about(self):
-        """Extract brand about information"""
         try:
             about_urls = [
                 f"{self.base_url}/pages/about",
@@ -182,7 +176,6 @@ class AllInOneShopifyScraper:
             return "Brand information not available"
     
     def scrape_policies(self):
-        """Scrape privacy, shipping, and return policies"""
         print("📋 Scraping policies...")
         
         policies = {
@@ -204,7 +197,6 @@ class AllInOneShopifyScraper:
                         if content:
                             policy_text = content.get_text(strip=True)
                             
-                            # Update database
                             if policy_type == 'privacy_policy':
                                 self.cursor.execute("UPDATE brands SET privacy_policy = ? WHERE id = ?", 
                                                   (policy_text, self.brand_id))
@@ -224,7 +216,6 @@ class AllInOneShopifyScraper:
                     continue
     
     def scrape_hero_products(self):
-        """Scrape hero products from homepage"""
         print("⭐ Scraping hero products from homepage...")
         
         try:
@@ -232,7 +223,6 @@ class AllInOneShopifyScraper:
             if response.status_code == 200:
                 soup = BeautifulSoup(response.text, 'html.parser')
                 
-                # Common selectors for hero products
                 product_selectors = [
                     '.product-item',
                     '.product-card',
@@ -246,7 +236,7 @@ class AllInOneShopifyScraper:
                 for selector in product_selectors:
                     products = soup.select(selector)
                     if products:
-                        for product in products[:10]:  # Limit to 10 hero products
+                        for product in products[:10]:
                             try:
                                 title_elem = product.select_one('.product-title, .product-name, h3, h4, [data-product-title]')
                                 price_elem = product.select_one('.price, .product-price, [data-price]')
@@ -257,14 +247,12 @@ class AllInOneShopifyScraper:
                                     price = price_elem.get_text(strip=True) if price_elem else "Price not available"
                                     product_url = urljoin(self.base_url, link_elem['href']) if link_elem else None
                                     
-                                    # Extract currency
                                     currency = "USD"
                                     if price and any(symbol in price for symbol in ['₹', '€', '£', '¥']):
                                         currency = {'₹': 'INR', '€': 'EUR', '£': 'GBP', '¥': 'JPY'}[
                                             next(symbol for symbol in ['₹', '€', '£', '¥'] if symbol in price)
                                         ]
                                     
-                                    # Save to database
                                     self.cursor.execute("""
                                         INSERT INTO products (brand_id, title, price, currency, is_hero, product_url)
                                         VALUES (?, ?, ?, ?, ?, ?)
@@ -286,7 +274,6 @@ class AllInOneShopifyScraper:
             print(f"Error scraping hero products: {e}")
     
     def scrape_all_products(self):
-        """Scrape all products using Shopify's products.json route"""
         print("📦 Scraping all products via Shopify products.json...")
         
         try:
@@ -305,7 +292,6 @@ class AllInOneShopifyScraper:
                         handle = product.get('handle', '')
                         product_url = f"{self.base_url}/products/{handle}"
                         
-                        # Get price from variants
                         variants = product.get('variants', [])
                         if variants:
                             price = variants[0].get('price', '0.00')
@@ -314,7 +300,6 @@ class AllInOneShopifyScraper:
                             price = '0.00'
                             currency = 'USD'
                         
-                        # Check if this is already a hero product
                         self.cursor.execute("SELECT id FROM products WHERE title = ? AND brand_id = ?", 
                                           (title, self.brand_id))
                         existing = self.cursor.fetchone()
@@ -340,7 +325,6 @@ class AllInOneShopifyScraper:
             print(f"Error scraping all products: {e}")
     
     def scrape_social_media(self):
-        """Scrape social media handles"""
         print("📱 Scraping social media handles...")
         
         try:
@@ -348,7 +332,6 @@ class AllInOneShopifyScraper:
             if response.status_code == 200:
                 soup = BeautifulSoup(response.text, 'html.parser')
                 
-                # Common social media patterns
                 social_patterns = {
                     'instagram': [r'instagram\.com/([^/\s]+)', r'@([^/\s]+)'],
                     'facebook': [r'facebook\.com/([^/\s]+)', r'fb\.com/([^/\s]+)'],
@@ -359,19 +342,16 @@ class AllInOneShopifyScraper:
                     'pinterest': [r'pinterest\.com/([^/\s]+)']
                 }
                 
-                # Search in page content and links
                 page_text = soup.get_text()
                 links = soup.find_all('a', href=True)
                 
                 for platform, patterns in social_patterns.items():
                     for pattern in patterns:
-                        # Search in text
                         matches = re.findall(pattern, page_text, re.IGNORECASE)
                         if matches:
                             handle = matches[0]
                             url = f"https://{platform}.com/{handle}"
                             
-                            # Save to database
                             self.cursor.execute("""
                                 INSERT OR REPLACE INTO social_handles (brand_id, platform, url)
                                 VALUES (?, ?, ?)
@@ -380,7 +360,6 @@ class AllInOneShopifyScraper:
                             print(f"{platform.title()}: {handle}")
                             break
                         
-                        # Search in links
                         for link in links:
                             href = link['href']
                             if platform in href.lower():
@@ -403,11 +382,9 @@ class AllInOneShopifyScraper:
             print(f"Error scraping social media: {e}")
     
     def scrape_contact_info(self):
-        """Scrape contact information"""
         print("📞 Scraping contact information...")
         
         try:
-            # Try contact page
             contact_urls = [
                 f"{self.base_url}/pages/contact",
                 f"{self.base_url}/contact",
@@ -421,25 +398,21 @@ class AllInOneShopifyScraper:
                         soup = BeautifulSoup(response.text, 'html.parser')
                         page_text = soup.get_text()
                         
-                        # Extract email addresses
                         email_pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
                         emails = re.findall(email_pattern, page_text)
                         
-                        # Extract phone numbers
                         phone_pattern = r'[\+]?[1-9][\d]{0,15}'
                         phones = re.findall(phone_pattern, page_text)
                         
-                        # Save emails
-                        for email in emails[:3]:  # Limit to 3 emails
+                        for email in emails[:3]:
                             self.cursor.execute("""
                                 INSERT OR REPLACE INTO contacts (brand_id, contact_type, value)
                                 VALUES (?, ?, ?)
                             """, (self.brand_id, 'email', email))
                             print(f"Email: {email}")
                         
-                        # Save phone numbers
-                        for phone in phones[:3]:  # Limit to 3 phones
-                            if len(phone) >= 10:  # Valid phone number length
+                        for phone in phones[:3]:
+                            if len(phone) >= 10:
                                 self.cursor.execute("""
                                     INSERT OR REPLACE INTO contacts (brand_id, contact_type, value)
                                     VALUES (?, ?, ?)
@@ -458,7 +431,6 @@ class AllInOneShopifyScraper:
             print(f"Error scraping contact info: {e}")
     
     def scrape_important_links(self):
-        """Scrape important website links"""
         print("🔗 Scraping important links...")
         
         try:
@@ -466,7 +438,6 @@ class AllInOneShopifyScraper:
             if response.status_code == 200:
                 soup = BeautifulSoup(response.text, 'html.parser')
                 
-                # Common important page patterns
                 important_pages = {
                     'order_tracking': ['/pages/track-order', '/pages/order-tracking', '/track-order'],
                     'returns': ['/pages/returns', '/pages/returns-exchanges', '/returns'],
@@ -501,11 +472,9 @@ class AllInOneShopifyScraper:
             print(f"Error scraping important links: {e}")
     
     def scrape_faqs(self):
-        """Scrape FAQs if available"""
         print("Scraping FAQs...")
         
         try:
-            # Try common FAQ page URLs
             faq_urls = [
                 f"{self.base_url}/pages/faq",
                 f"{self.base_url}/pages/faqs",
@@ -519,7 +488,6 @@ class AllInOneShopifyScraper:
                     if response.status_code == 200:
                         soup = BeautifulSoup(response.text, 'html.parser')
                         
-                        # Look for FAQ patterns
                         faq_selectors = [
                             '.faq-item',
                             '.faq-question',
@@ -568,24 +536,18 @@ class AllInOneShopifyScraper:
             print(f"Error scraping FAQs: {e}")
     
     def find_competitors_online(self):
-        """Find competitors using multiple online discovery methods"""
         print("Finding competitors online...")
         
         competitors_found = []
         
-        # Method 1: Google search for similar stores
         competitors_found.extend(self.find_competitors_via_google())
         
-        # Method 2: Social media discovery
         competitors_found.extend(self.find_competitors_via_social_media())
         
-        # Method 3: Product search discovery
         competitors_found.extend(self.find_competitors_via_product_search())
         
-        # Method 4: Industry directory discovery
         competitors_found.extend(self.find_competitors_via_directories())
         
-        # Save competitors to database
         for competitor in competitors_found:
             self.save_competitor(competitor)
         
@@ -593,17 +555,14 @@ class AllInOneShopifyScraper:
         return competitors_found
     
     def find_competitors_via_google(self):
-        """Find competitors using Google search"""
         print("   Searching Google for competitors...")
         competitors = []
         
         try:
-            # Extract brand name for search
             brand_name = self.extract_brand_name()
             if brand_name == "Unknown Brand":
                 return competitors
             
-            # Create search queries
             search_queries = [
                 f'"{brand_name}" competitors',
                 f'"{brand_name}" similar stores',
@@ -614,10 +573,8 @@ class AllInOneShopifyScraper:
             
             for query in search_queries:
                 try:
-                    # Note: This is a simplified approach. In production, you'd use Google Search API
-                    # For now, we'll simulate finding competitors through other methods
                     print(f"     Searching: {query}")
-                    time.sleep(1)  # Be respectful
+                    time.sleep(1)
                     
                 except Exception as e:
                     print(f"     Error with Google search: {e}")
@@ -631,19 +588,16 @@ class AllInOneShopifyScraper:
         return competitors
     
     def find_competitors_via_social_media(self):
-        """Find competitors through social media analysis"""
         print("   Finding competitors via social media...")
         competitors = []
         
         try:
-            # Get social media handles of current brand
             self.cursor.execute("SELECT platform, url FROM social_handles WHERE brand_id = ?", (self.brand_id,))
             social_handles = self.cursor.fetchall()
             
             for platform, url in social_handles:
                 try:
                     if platform in ['instagram', 'facebook']:
-                        # Look for similar accounts in the same industry
                         competitors.extend(self.find_social_competitors(platform, url))
                 except Exception as e:
                     print(f"     Error with {platform}: {e}")
@@ -655,23 +609,16 @@ class AllInOneShopifyScraper:
         return competitors
     
     def find_social_competitors(self, platform, url):
-        """Find competitors on specific social media platforms"""
         competitors = []
         
         try:
-            # Extract username from URL
             if platform == 'instagram':
                 username = url.split('/')[-1] if url.endswith('/') else url.split('/')[-1]
-                # Look for similar accounts (this would require Instagram API in production)
                 print(f"     Looking for similar Instagram accounts to @{username}")
                 
             elif platform == 'facebook':
-                # Extract page name from Facebook URL
                 page_name = url.split('/')[-1] if url.endswith('/') else url.split('/')[-1]
                 print(f"     Looking for similar Facebook pages to {page_name}")
-            
-            # In a real implementation, you'd use platform APIs to find similar accounts
-            # For now, we'll simulate finding some competitors
             
         except Exception as e:
             print(f"     Error finding {platform} competitors: {e}")
@@ -679,19 +626,16 @@ class AllInOneShopifyScraper:
         return competitors
     
     def find_competitors_via_product_search(self):
-        """Find competitors by searching for similar products"""
         print("   Finding competitors via product search...")
         competitors = []
         
         try:
-            # Get some hero products to search for
             self.cursor.execute("SELECT title FROM products WHERE brand_id = ? AND is_hero = 1 LIMIT 3", (self.brand_id,))
             hero_products = self.cursor.fetchall()
             
             for product in hero_products:
                 product_title = product[0]
                 try:
-                    # Search for similar products online
                     competitors.extend(self.search_similar_products(product_title))
                 except Exception as e:
                     print(f"     Error searching for product '{product_title}': {e}")
@@ -703,14 +647,11 @@ class AllInOneShopifyScraper:
         return competitors
     
     def search_similar_products(self, product_title):
-        """Search for similar products to find competitors"""
         competitors = []
         
         try:
-            # Extract key product terms
             key_terms = self.extract_product_keywords(product_title)
             
-            # Create search queries
             search_queries = [
                 f'"{product_title}" alternative',
                 f'"{product_title}" similar products',
@@ -720,7 +661,6 @@ class AllInOneShopifyScraper:
             
             for query in search_queries:
                 print(f"     Searching for: {query}")
-                # In production, you'd use search APIs here
                 time.sleep(0.5)
             
         except Exception as e:
@@ -729,33 +669,27 @@ class AllInOneShopifyScraper:
         return competitors
     
     def extract_product_keywords(self, product_title):
-        """Extract key product terms for search"""
-        # Remove common words and extract key terms
         common_words = ['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by']
         words = product_title.lower().split()
         keywords = [word for word in words if word not in common_words and len(word) > 2]
-        return ' '.join(keywords[:3])  # Return top 3 keywords
+        return ' '.join(keywords[:3])
     
     def find_competitors_via_directories(self):
-        """Find competitors through industry directories and listings"""
         print("   Finding competitors via industry directories...")
         competitors = []
         
         try:
-            # Common industry directories
             directories = [
                 'https://www.alexa.com/topsites/category/',
                 'https://www.similarweb.com/category/',
                 'https://www.owler.com/company/'
             ]
             
-            # Extract industry category from brand description
             industry = self.extract_industry_category()
             
             for directory in directories:
                 try:
                     print(f"     Checking directory: {directory}")
-                    # In production, you'd scrape these directories for competitors
                     time.sleep(0.5)
                 except Exception as e:
                     print(f"     Error with directory {directory}: {e}")
@@ -767,7 +701,6 @@ class AllInOneShopifyScraper:
         return competitors
     
     def extract_industry_category(self):
-        """Extract industry category from brand information"""
         try:
             self.cursor.execute("SELECT about FROM brands WHERE id = ?", (self.brand_id,))
             about = self.cursor.fetchone()
@@ -775,7 +708,6 @@ class AllInOneShopifyScraper:
             if about and about[0]:
                 about_text = about[0].lower()
                 
-                # Define industry keywords
                 industries = {
                     'fashion': ['clothing', 'fashion', 'apparel', 'style', 'wear'],
                     'beauty': ['beauty', 'cosmetics', 'skincare', 'makeup', 'personal care'],
@@ -796,9 +728,7 @@ class AllInOneShopifyScraper:
             return 'general'
     
     def save_competitor(self, competitor_data):
-        """Save competitor information to database"""
         try:
-            # Check if competitor already exists
             self.cursor.execute("SELECT id FROM competitors WHERE competitor_url = ? AND brand_id = ?", 
                               (competitor_data['url'], self.brand_id))
             existing = self.cursor.fetchone()
@@ -815,7 +745,6 @@ class AllInOneShopifyScraper:
                 competitor_id = self.cursor.lastrowid
                 print(f"     Saved competitor: {competitor_data['name']}")
                 
-                # If we have product data, save it too
                 if 'products' in competitor_data:
                     self.save_competitor_products(competitor_id, competitor_data['products'])
                 
@@ -827,7 +756,6 @@ class AllInOneShopifyScraper:
             print(f"     Error saving competitor: {e}")
     
     def save_competitor_products(self, competitor_id, products):
-        """Save competitor products to database"""
         try:
             for product in products:
                 self.cursor.execute("""
@@ -842,11 +770,9 @@ class AllInOneShopifyScraper:
             print(f"       Error saving competitor products: {e}")
     
     def analyze_competitors(self):
-        """Analyze found competitors and provide insights"""
         print("Analyzing competitors...")
         
         try:
-            # Get all competitors
             self.cursor.execute("""
                 SELECT c.competitor_name, c.competitor_url, c.competitor_type, c.similarity_score,
                        COUNT(cp.id) as product_count
@@ -865,7 +791,6 @@ class AllInOneShopifyScraper:
             
             print(f"   Found {len(competitors)} competitors to analyze")
             
-            # Analyze each competitor
             for competitor in competitors:
                 name, url, comp_type, score, product_count = competitor
                 print(f"   {name}")
@@ -875,14 +800,12 @@ class AllInOneShopifyScraper:
                 print(f"      Products: {product_count}")
                 print()
             
-            # Generate competitive insights
             self.generate_competitive_insights(competitors)
             
         except Exception as e:
             print(f"   Error analyzing competitors: {e}")
     
     def generate_competitive_insights(self, competitors):
-        """Generate insights about competitive landscape"""
         print("   COMPETITIVE INSIGHTS:")
         print("   " + "-" * 40)
         
@@ -890,18 +813,15 @@ class AllInOneShopifyScraper:
             if not competitors:
                 return
             
-            # Calculate average similarity score
             scores = [comp[3] for comp in competitors if comp[3] is not None]
             avg_score = sum(scores) / len(scores) if scores else 0
             
             print(f"   Average Competitor Similarity: {avg_score:.2f}")
             print(f"   Total Competitors Identified: {len(competitors)}")
             
-            # Identify top competitors
             top_competitors = [comp for comp in competitors if comp[3] and comp[3] > avg_score]
             print(f"   High-Similarity Competitors: {len(top_competitors)}")
             
-            # Industry distribution
             types = [comp[2] for comp in competitors if comp[2]]
             if types:
                 type_counts = {}
@@ -918,45 +838,34 @@ class AllInOneShopifyScraper:
             print(f"   Error generating insights: {e}")
     
     def run_complete_scrape(self):
-        """Run the complete scraping process with competitors"""
         print(f"Starting complete scrape of: {self.base_url}")
         print("=" * 60)
         
         start_time = time.time()
         
         try:
-            # Step 1: Create/get brand
             if not self.create_or_get_brand():
                 print("Failed to create brand. Exiting.")
                 return False
             
-
             self.scrape_policies()
             
-
             self.scrape_hero_products()
 
             self.scrape_all_products()
             
-
             self.scrape_social_media()
                     
-
             self.scrape_contact_info()
             
-
             self.scrape_important_links()
             
-            # Step 8: Scrape FAQs
             self.scrape_faqs()
             
-            # Step 9: Find competitors online
             self.find_competitors_online()
             
-            # Step 10: Analyze competitors
             self.analyze_competitors()
             
-            # Final commit
             self.conn.commit()
             
             end_time = time.time()
@@ -966,7 +875,6 @@ class AllInOneShopifyScraper:
             print(f"COMPLETE SCRAPE WITH COMPETITORS FINISHED in {duration:.2f} seconds!")
             print(f"Data saved to: {self.db_name}")
             
-            # Show summary
             self.show_summary()
             
             return True
@@ -980,40 +888,30 @@ class AllInOneShopifyScraper:
                 self.conn.close()
     
     def run_store_scrape_only(self):
-        """Run store scraping without competitor analysis"""
         print(f"Starting store data scrape of: {self.base_url}")
         print("=" * 60)
         
         start_time = time.time()
         
         try:
-            # Step 1: Create/get brand
             if not self.create_or_get_brand():
                 print("Failed to create brand. Exiting.")
                 return False
             
-            # Step 2: Scrape policies
             self.scrape_policies()
             
-            # Step 3: Scrape hero products
             self.scrape_hero_products()
             
-            # Step 4: Scrape all products
             self.scrape_all_products()
             
-
             self.scrape_social_media()
             
-
             self.scrape_contact_info()
             
-            # Step 7: Scrape important links
             self.scrape_important_links()
             
-            # Step 8: Scrape FAQs
             self.scrape_faqs()
             
-            # Final commit
             self.conn.commit()
             
             end_time = time.time()
@@ -1023,7 +921,6 @@ class AllInOneShopifyScraper:
             print(f"STORE DATA SCRAPE FINISHED in {duration:.2f} seconds!")
             print(f"Data saved to: {self.db_name}")
             
-
             self.show_summary()
             
             return True
@@ -1037,12 +934,10 @@ class AllInOneShopifyScraper:
                 self.conn.close()
     
     def show_summary(self):
-        """Show summary of collected data"""
         print("\nDATA COLLECTION SUMMARY:")
         print("-" * 40)
         
         try:
-            # Brand info
             self.cursor.execute("SELECT name, about FROM brands WHERE id = ?", (self.brand_id,))
             brand_info = self.cursor.fetchone()
             if brand_info:
@@ -1050,37 +945,30 @@ class AllInOneShopifyScraper:
                 if brand_info[1]:
                     print(f"   About: {brand_info[1][:100]}...")
             
-            # Products count
             self.cursor.execute("SELECT COUNT(*) FROM products WHERE brand_id = ?", (self.brand_id,))
             total_products = self.cursor.fetchone()[0]
             print(f"Total Products: {total_products}")
             
-            # Hero products count
             self.cursor.execute("SELECT COUNT(*) FROM products WHERE brand_id = ? AND is_hero = 1", (self.brand_id,))
             hero_products = self.cursor.fetchone()[0]
             print(f"Hero Products: {hero_products}")
             
-            # Social media count
             self.cursor.execute("SELECT COUNT(*) FROM social_handles WHERE brand_id = ?", (self.brand_id,))
             social_count = self.cursor.fetchone()[0]
             print(f"Social Media: {social_count} platforms")
             
-            # Contact count
             self.cursor.execute("SELECT COUNT(*) FROM contacts WHERE brand_id = ?", (self.brand_id,))
             contact_count = self.cursor.fetchone()[0]
             print(f"Contacts: {contact_count}")
             
-            # Important links count
             self.cursor.execute("SELECT COUNT(*) FROM products WHERE brand_id = ?", (self.brand_id,))
             links_count = self.cursor.fetchone()[0]
             print(f"Important Links: {links_count}")
             
-            # FAQs count
             self.cursor.execute("SELECT COUNT(*) FROM products WHERE brand_id = ?", (self.brand_id,))
             faqs_count = self.cursor.fetchone()[0]
             print(f"FAQs: {faqs_count}")
 
-            # Competitors count
             self.cursor.execute("SELECT COUNT(*) FROM competitors WHERE brand_id = ?", (self.brand_id,))
             competitors_count = self.cursor.fetchone()[0]
             print(f"Competitors: {competitors_count}")
@@ -1090,7 +978,6 @@ class AllInOneShopifyScraper:
 
 
 def main():
-    """Main function to run the scraper"""
     print("🛍️ ALL-IN-ONE SHOPIFY STORE SCRAPER WITH COMPETITOR ANALYSIS")
     print("=" * 60)
     
@@ -1105,7 +992,6 @@ def main():
         choice = input("\nEnter your choice (1-5): ").strip()
         
         if choice == "1":
-            # Complete scrape with competitors
             store_url = input("Enter Shopify store URL (e.g., https://store.com): ").strip()
             if store_url:
                 if not store_url.startswith(('http://', 'https://')):
@@ -1123,7 +1009,6 @@ def main():
                 print("No URL provided.")
         
         elif choice == "2":
-            # Find competitors only
             store_url = input("Enter Shopify store URL to find competitors for: ").strip()
             if store_url:
                 if not store_url.startswith(('http://', 'https://')):
@@ -1140,7 +1025,6 @@ def main():
                 print("No URL provided.")
         
         elif choice == "3":
-            # Analyze existing competitors
             store_url = input("Enter Shopify store URL to analyze existing competitors: ").strip()
             if store_url:
                 if not store_url.startswith(('http://', 'https://')):
@@ -1155,7 +1039,6 @@ def main():
                 print("No URL provided.")
         
         elif choice == "4":
-            # Store data only (no competitors)
             store_url = input("Enter Shopify store URL (e.g., https://store.com): ").strip()
             if store_url:
                 if not store_url.startswith(('http://', 'https://')):
@@ -1179,7 +1062,6 @@ def main():
         else:
             print("Invalid choice. Please enter 1-5.")
         
-        # Ask if user wants to continue
         if choice in ["1", "2", "3", "4"]:
             continue_choice = input("\nDo you want to perform another operation? (y/n): ").strip().lower()
             if continue_choice not in ['y', 'yes']:
