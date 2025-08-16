@@ -24,7 +24,7 @@ class AllInOneShopifyScraper:
         
     def init_database(self):
         """Initialize SQLite database with all tables"""
-        print("Initializing database...")
+        print("🗄️ Initializing database...")
         self.conn = sqlite3.connect(self.db_name)
         self.cursor = self.conn.cursor()
         
@@ -112,7 +112,7 @@ class AllInOneShopifyScraper:
         """)
         
         self.conn.commit()
-        print("Database initialized successfully!")
+        print("✅ Database initialized successfully!")
     
     def create_or_get_brand(self):
         """Create or get existing brand"""
@@ -131,7 +131,7 @@ class AllInOneShopifyScraper:
                 
                 self.brand_id = self.cursor.lastrowid
                 self.conn.commit()
-                print(f"Created new brand: {brand_name}")
+                print(f"✨ Created new brand: {brand_name}")
             else:
                 self.brand_id = existing[0]
                 print(f"Found existing brand ID: {self.brand_id}")
@@ -183,7 +183,7 @@ class AllInOneShopifyScraper:
     
     def scrape_policies(self):
         """Scrape privacy, shipping, and return policies"""
-        print("Scraping policies...")
+        print("📋 Scraping policies...")
         
         policies = {
             'privacy_policy': ['/pages/privacy-policy', '/pages/privacy'],
@@ -216,16 +216,16 @@ class AllInOneShopifyScraper:
                                                   (policy_text, self.brand_id))
                             
                             self.conn.commit()
-                            print(f"✅ {policy_type.replace('_', ' ').title()}: {len(policy_text)} characters")
+                            print(f"{policy_type.replace('_', ' ').title()}: {len(policy_text)} characters")
                             break
                             
                 except Exception as e:
-                    print(f"⚠️ Error scraping {policy_type}: {e}")
+                    print(f"Error scraping {policy_type}: {e}")
                     continue
     
     def scrape_hero_products(self):
         """Scrape hero products from homepage"""
-        print("Scraping hero products from homepage...")
+        print("⭐ Scraping hero products from homepage...")
         
         try:
             response = self.session.get(self.base_url, timeout=10)
@@ -273,7 +273,7 @@ class AllInOneShopifyScraper:
                                     products_found += 1
                                     
                             except Exception as e:
-                                print(f"⚠️ Error processing hero product: {e}")
+                                print(f"Error processing hero product: {e}")
                                 continue
                         
                         if products_found > 0:
@@ -287,7 +287,7 @@ class AllInOneShopifyScraper:
     
     def scrape_all_products(self):
         """Scrape all products using Shopify's products.json route"""
-        print("Scraping all products via Shopify products.json...")
+        print("📦 Scraping all products via Shopify products.json...")
         
         try:
             products_url = f"{self.base_url}/products.json"
@@ -297,7 +297,7 @@ class AllInOneShopifyScraper:
                 data = response.json()
                 products = data.get('products', [])
                 
-                print(f"📊 Found {len(products)} products to process...")
+                print(f"Found {len(products)} products to process...")
                 
                 for i, product in enumerate(products, 1):
                     try:
@@ -330,7 +330,7 @@ class AllInOneShopifyScraper:
                             self.conn.commit()
                             
                     except Exception as e:
-                        print(f"⚠️ Error processing product {i}: {e}")
+                        print(f"Error processing product {i}: {e}")
                         continue
                 
                 self.conn.commit()
@@ -341,7 +341,7 @@ class AllInOneShopifyScraper:
     
     def scrape_social_media(self):
         """Scrape social media handles"""
-        print("Scraping social media handles...")
+        print("📱 Scraping social media handles...")
         
         try:
             response = self.session.get(self.base_url, timeout=10)
@@ -377,7 +377,7 @@ class AllInOneShopifyScraper:
                                 VALUES (?, ?, ?)
                             """, (self.brand_id, platform, url))
                             
-                            print(f"✅ {platform.title()}: {handle}")
+                            print(f"{platform.title()}: {handle}")
                             break
                         
                         # Search in links
@@ -404,7 +404,7 @@ class AllInOneShopifyScraper:
     
     def scrape_contact_info(self):
         """Scrape contact information"""
-        print("Scraping contact information...")
+        print("📞 Scraping contact information...")
         
         try:
             # Try contact page
@@ -459,7 +459,7 @@ class AllInOneShopifyScraper:
     
     def scrape_important_links(self):
         """Scrape important website links"""
-        print("Scraping important links...")
+        print("🔗 Scraping important links...")
         
         try:
             response = self.session.get(self.base_url, timeout=10)
@@ -569,7 +569,7 @@ class AllInOneShopifyScraper:
     
     def find_competitors_online(self):
         """Find competitors using multiple online discovery methods"""
-        print("🔍 Finding competitors online...")
+        print("Finding competitors online...")
         
         competitors_found = []
         
@@ -620,7 +620,7 @@ class AllInOneShopifyScraper:
                     time.sleep(1)  # Be respectful
                     
                 except Exception as e:
-                    print(f"     ⚠️ Error with Google search: {e}")
+                    print(f"     Error with Google search: {e}")
                     continue
             
             print("     Google search completed (simulated)")
@@ -694,7 +694,7 @@ class AllInOneShopifyScraper:
                     # Search for similar products online
                     competitors.extend(self.search_similar_products(product_title))
                 except Exception as e:
-                    print(f"     ⚠️ Error searching for product '{product_title}': {e}")
+                    print(f"     Error searching for product '{product_title}': {e}")
                     continue
             
         except Exception as e:
@@ -868,7 +868,7 @@ class AllInOneShopifyScraper:
             # Analyze each competitor
             for competitor in competitors:
                 name, url, comp_type, score, product_count = competitor
-                print(f"   🏢 {name}")
+                print(f"   {name}")
                 print(f"      URL: {url}")
                 print(f"      Type: {comp_type}")
                 print(f"      Similarity Score: {score:.2f}")
@@ -1091,16 +1091,16 @@ class AllInOneShopifyScraper:
 
 def main():
     """Main function to run the scraper"""
-    print("ALL-IN-ONE SHOPIFY STORE SCRAPER WITH COMPETITOR ANALYSIS")
+    print("🛍️ ALL-IN-ONE SHOPIFY STORE SCRAPER WITH COMPETITOR ANALYSIS")
     print("=" * 60)
     
     while True:
         print("\nChoose an option:")
-        print("1. Complete Store Scrape (All Data + Competitors)")
-        print("2. Find Competitors Only")
-        print("3. Analyze Existing Competitors")
-        print("4. Scrape Store Data Only (No Competitors)")
-        print("5. Exit")
+        print("1. 🔍 Complete Store Scrape (All Data + Competitors)")
+        print("2. 🏢 Find Competitors Only")
+        print("3. 📊 Analyze Existing Competitors")
+        print("4. 🛒 Scrape Store Data Only (No Competitors)")
+        print("5. 🚪 Exit")
         
         choice = input("\nEnter your choice (1-5): ").strip()
         
